@@ -1,25 +1,192 @@
 ---
+
 title: "Reproducible Research: Peer Assessment 1"
+author: "Jesús Pérez"
+date: "7/30/2020"
 output: 
   html_document:
     keep_md: true
+
 ---
 
+# Activity monitoring
 
-## Loading and preprocessing the data
+## 1. Loading and opening the data
+
+```{r Open the file, echo = TRUE}
+
+## Loading the file as a zip file
+path <- getwd()
+url <- "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+download.file(url, destfile = paste(path, "Files.zip", sep = "/"))
+unzip(zipfile = "Files.zip")
+
+## Open the data
+data <- read.csv("activity.csv", header = TRUE)
+str(data)
+head(data)
+```
+
+Now we can see some parameters such as maximum, minimum, range and the NA's values of each variable using the **summary** function.
+
+```{r summary1, echo = TRUE}
+summary(data)
+```
+
+### 1.1 subsetting the data
+
+Before plot the histogram we need to subset the data. For that purpose the **aggregate** function was used. The NA's values were desconsired.
+
+```{r process data, echo = TRUE}
+
+df <- aggregate(data$steps, by=list(date=data$date), FUN=sum)
+df <- df[!is.na(df$x),]
+summary(df)
+head(df)
+````
+
+## 2. Plotting the Total per day histogram
+
+To plot the histogram the **ggplot2** package was used. This is the ***histogram*** and not the ***barplot***. A histogram is used to continuous variables and shows the frequency of that particularly variable.
+ 
+```{r histogram, echo = TRUE }
+library(ggplot2)
+p <- ggplot(df, aes(x=x))
+p + geom_histogram(binwidth=1000, 
+                   fill="#69b3a2", 
+                   color="#e9ecef", 
+                   alpha=0.7) + 
+        labs(x= "Total steps per day", 
+             y = "Frequency", 
+             title = "Histogram of the total steps taken each day")
+
+```
+
+## 3. Mean and median 
+
+The Mean and median number of steps taken each day can be obtained using the **summary** function (see section 7.1).
+
+``` {r summary, echo = TRUE}
+summary(df$x)
+```
+## 4. Time series plot of the average number of steps taken
+
+For the second plot a new subsetting was made using the **aggregate** function, and then graphicated using **ggplot2**. 
+
+``` {r plot2, echo = TRUE}
+## Subsetting
+df2 <- aggregate(data$steps, 
+                 by=list(l=data$interval), 
+                 FUN=mean, na.rm = TRUE)
+
+## Calculating the max
+maxx <- df2$l[which.max(df2$x)]
+
+## Plotting 
+p <-    ggplot(df2, aes(x = l, y = x)) +
+        geom_line() + 
+        labs(x= "Interval", y = "Average of steps taken", 
+                title = "Average of steps taken by Time Interval") +
+        geom_vline(xintercept= maxx, linetype="dashed", color = "red")
+print(p)
+```
+
+## 5. Maximum number of steps by time interval
+
+The 5-minute interval that, on average, contains the maximum number of steps was calculate using the **which.max** function (See plot 2) and the result was reported in hours.
+
+
+``` {r maximum, echo = TRUE}
+library(lubridate)
+
+## Calculating the max
+maxx <- df2$l[which.max(df2$x)]
+
+## Transform to hours
+duration(maxx, "minutes")
+```
+
+## 6. Imputing missing values
+
+As there are days/intervals with missing values \textcolor{red}{NA} a new datasets was created. But, first the porcentage of \textcolor{red}{NA} was calculated. (Note that the total \textcolor{red}{NA} values were reported using the **summary** function in section **1**)
+
+``` {r NA, echo = TRUE}
+NAt <- sum(is.na(data$steps))
+t <- nrow(data)
+NAp <- (NAt/t)*100
+NAp
+```
+
+### 6.1 Filling in the missing values
+
+The \textcolor{red}{NA} values were filled with the mean values for their respective 5-minute interval using the **mutate** function of the **dyplr** package. A new dataset identically to the original but with the missing data filled in was created.
+
+```` {r treating NA values, echo = TRUE}
+library(dplyr)
+df3 <- cbind(df2$x, data)
+names(df3)[names(df3) == "df2$x"] <- "MeanSteps"
+df4 <- df3 %>% mutate(MissingSteps = ifelse(is.na(steps), MeanSteps, steps))
+df4 <- df4[, 2:5]
+head(df4)
+
+```
+
+## 7 Histogram of the total number of steps taken each day after missing values
+
+The new histogram was created with the new dataset. The results show that are no evident differences between plot 1 and 3, that means the ausence of \textcolor{red}{NA} values did not affect the analysis.
+
+``` {r plot3, echo = TRUE}
+df5 <- aggregate(df4$MissingSteps, by=list(date=df4$date), FUN=sum)
+p <- ggplot(df5, aes(x=x))
+p + geom_histogram(binwidth=1000, 
+                   fill="#404080", 
+                   color="#e9ecef", 
+                   alpha=0.6) + 
+        labs(x= "Total steps per day", 
+             y = "Frequency", 
+             title = "Histogram of the total steps taken each day without NA values")
+
+````
+
+### 7.1 New Mean and Median
+
+To show the mean and median of the new dataset a table was created. The analysis shows that there were not differences between the original dataset and the dataset imputed with \textcolor{red}{NA} values. So, imputing missing data on the estimates of the total daily number of steps did not alterate the results.
+
+``` {r mean and median comparisson, echo = TRUE}
+Mean <- c(mean(df$x), mean(df5$x))
+Median <- c(median(df$x), median(df5$x))
+Comparisson <- cbind(Mean, Median)
+Comparisson
+
+```
+
+## 8. Activity patterns between weekdays and weekends
+
+To analyse the differences in the activity patterns between weekdays and weekends a new dataset was created. For this reason, the **weekdays** function was used, first converting the date to Date objects and then calculating the DayType as a factor. 
+
+``` {r Day type, echo = TRUE}
+df4$date <- as.Date(df4$date)
+day <- as.factor(weekdays(df4$date))
+df6 <- cbind(df4, day)
+weekend <- c("Satruday", "Sunday")
+df6 <- df6 %>% mutate(DayType = ifelse(day == weekend, "Weekend", "Weekday"))
+df6$DayType <- as.factor(df6$DayType)
+head(df6)
+```
+
+### 8.1 Panel plot
+
+With the new dataset the results were plot using **ggplot2**. These plots clrearly show an important difference between the Activity patterns between weekdays and weekends.
+
+``` {r plot4, echo = TRUE} 
+df7 <- df6 %>% group_by(interval,DayType) %>% summarise(AverageSteps=mean(MissingSteps))
+p <- df7 %>% ggplot(aes(x = interval, y = AverageSteps)) +
+        geom_line() + 
+        facet_grid(DayType ~ .) +
+        labs(x= "Interval", y = "Average of steps taken by Time Interval", 
+             title = "Average of steps taken by Time Interval and Day Type")
+print(p)
+```
 
 
 
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
-
-
-
-## Are there differences in activity patterns between weekdays and weekends?
