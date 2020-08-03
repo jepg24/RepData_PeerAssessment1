@@ -1,12 +1,10 @@
 ---
-
 title: "Reproducible Research: Peer Assessment 1"
 author: "Jesús Pérez"
 date: "7/30/2020"
 output: 
-  html_document:
-    keep_md: true
-
+  html_document: 
+    keep_md: yes
 ---
 
 # Activity monitoring
